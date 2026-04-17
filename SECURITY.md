@@ -10,8 +10,8 @@ Please do not open a public GitHub issue for suspected vulnerabilities.
 
 Preferred private reporting path:
 
-1. Use the repository host's private vulnerability reporting mechanism if one is enabled, such as GitHub Security Advisories private reporting.
-2. If private reporting is not enabled, contact the maintainers through the dedicated security contact listed in the repository settings or project profile.
+1. Use GitHub Security Advisories private reporting for this repository when it is enabled: `https://github.com/electricalen/dep-inspect/security/advisories/new`
+2. If private reporting is unavailable, contact the maintainer at `electricalen@gmail.com`.
 
 Include:
 
@@ -19,7 +19,7 @@ Include:
 2. Reproduction steps, impact, and any required environment details.
 3. Proof-of-concept material only when it is necessary to reproduce safely.
 
-Before making the repository public, configure one of the private reporting paths above and keep this file aligned with the live reporting mechanism.
+Keep this file aligned with the live reporting mechanism if the repository security workflow changes.
 
 ## Disclosure Expectations
 

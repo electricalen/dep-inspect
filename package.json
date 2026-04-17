@@ -39,7 +39,15 @@
     "cli",
     "supply-chain"
   ],
-  "author": "dep-inspect maintainers",
+  "author": "David Sawyer <electricalen@gmail.com>",
+  "homepage": "https://github.com/electricalen/dep-inspect",
+  "bugs": {
+    "url": "https://github.com/electricalen/dep-inspect/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/electricalen/dep-inspect.git"
+  },
   "license": "MIT",
   "dependencies": {
     "@commander-js/extra-typings": "^14.0.0",
