@@ -61,7 +61,7 @@
   },
   "devDependencies": {
     "@commitlint/cli": "^19.8.0",
-    "@commitlint/config-conventional": "^19.8.0",
+    "@commitlint/config-conventional": "^20.5.0",
     "@fast-check/vitest": "^0.2.3",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.14.1",
