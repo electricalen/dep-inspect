@@ -302,6 +302,58 @@ describe('analyzeProject', () => {
     expect(analysis.value.policyResult.status).toBe('fail') // deprecated is critical
   })
 
+  it('records which direct dependency introduces a transitive finding', async () => {
+    const lockfileData = makeLockfileData([
+      [
+        'next@16.1.6',
+        {
+          name: 'next',
+          version: '16.1.6',
+          dependencies: { ajv: '6.12.6' },
+        },
+      ],
+      ['ajv@6.12.6', { name: 'ajv', version: '6.12.6' }],
+    ])
+
+    const staleMetadata: PackageMetadata = {
+      name: 'ajv',
+      version: '6.12.6',
+      license: 'MIT',
+      maintainers: [{ name: 'alice' }, { name: 'bob' }],
+      publishedAt: new Date('2020-01-01T00:00:00.000Z'),
+      createdAt: new Date('2016-01-01T00:00:00.000Z'),
+      latestVersion: '8.17.1',
+      allVersions: ['6.12.6', '8.17.1'],
+      repository: { url: 'https://github.com/test/ajv' },
+    }
+
+    const result = analyzeProject(
+      '.',
+      { name: 'web-app', dependencies: { next: '16.1.6' } },
+      {
+        registry: fakeRegistry(new Map([['ajv', staleMetadata]])),
+        vulnerability: fakeVulnerability(),
+        lockfile: fakeLockfile(lockfileData),
+        policy: DEFAULT_POLICY,
+      },
+    )
+
+    expect(result.isOk()).toBe(true)
+    if (!result.isOk()) return
+
+    const analysis = await result.value
+    expect(analysis.isOk()).toBe(true)
+    if (!analysis.isOk()) return
+
+    const transitiveFinding = analysis.value.policyResult.findings.find(
+      (finding) => finding.name === 'ajv' && finding.version === '6.12.6',
+    )
+
+    expect(transitiveFinding).toBeDefined()
+    expect(transitiveFinding?.isDirect).toBe(false)
+    expect(transitiveFinding?.introducedBy).toBe('next')
+  })
+
   it('tracks githubEnabled flag', async () => {
     const lockfileData = makeLockfileData([
       ['lodash@4.17.21', { name: 'lodash', version: '4.17.21' }],

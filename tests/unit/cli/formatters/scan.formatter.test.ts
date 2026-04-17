@@ -244,6 +244,232 @@ describe('formatScan', () => {
     expect(output).not.toContain('══ CRITICAL')
   })
 
+  it('includes the suggested direct critical dependency in the review shortlist', () => {
+    const output = formatScan(
+      makeAnalysis([
+        makeFinding({
+          name: pkg('next'),
+          version: '16.1.6',
+          isDirect: true,
+          isRuntime: true,
+          waived: [],
+          flags: [
+            {
+              kind: 'vulnerability',
+              vulnerabilities: [
+                {
+                  id: 'NEXT-1',
+                  severity: 'critical',
+                  summary: 'critical vuln',
+                  fixAvailable: true,
+                },
+              ],
+            },
+          ],
+        }),
+        makeFinding({
+          name: pkg('ajv'),
+          version: '6.12.6',
+          isDirect: false,
+          isRuntime: true,
+          introducedBy: pkg('eslint'),
+          waived: [],
+          flags: [
+            {
+              kind: 'vulnerability',
+              vulnerabilities: [
+                { id: 'AJV-1', severity: 'critical', summary: 'critical vuln', fixAvailable: true },
+              ],
+            },
+            {
+              kind: 'unmaintained',
+              lastPublishDate: new Date('2020-01-01'),
+              daysSincePublish: 2000,
+              thresholdDays: 730,
+            },
+          ],
+        }),
+        makeFinding({
+          name: pkg('minimatch-a'),
+          version: '1.0.0',
+          isDirect: false,
+          isRuntime: true,
+          introducedBy: pkg('eslint'),
+          waived: [],
+          flags: [
+            {
+              kind: 'vulnerability',
+              vulnerabilities: [
+                {
+                  id: 'MINI-1',
+                  severity: 'critical',
+                  summary: 'critical vuln',
+                  fixAvailable: true,
+                },
+                {
+                  id: 'MINI-2',
+                  severity: 'critical',
+                  summary: 'critical vuln',
+                  fixAvailable: true,
+                },
+                {
+                  id: 'MINI-3',
+                  severity: 'critical',
+                  summary: 'critical vuln',
+                  fixAvailable: true,
+                },
+              ],
+            },
+            { kind: 'install-scripts', scripts: ['prepare'] },
+          ],
+        }),
+        makeFinding({
+          name: pkg('minimatch-b'),
+          version: '1.0.0',
+          isDirect: false,
+          isRuntime: true,
+          introducedBy: pkg('eslint'),
+          waived: [],
+          flags: [
+            {
+              kind: 'vulnerability',
+              vulnerabilities: [
+                {
+                  id: 'MINI-4',
+                  severity: 'critical',
+                  summary: 'critical vuln',
+                  fixAvailable: true,
+                },
+                {
+                  id: 'MINI-5',
+                  severity: 'critical',
+                  summary: 'critical vuln',
+                  fixAvailable: true,
+                },
+                {
+                  id: 'MINI-6',
+                  severity: 'critical',
+                  summary: 'critical vuln',
+                  fixAvailable: true,
+                },
+              ],
+            },
+            { kind: 'install-scripts', scripts: ['prepare'] },
+          ],
+        }),
+        makeFinding({
+          name: pkg('minimatch-c'),
+          version: '1.0.0',
+          isDirect: false,
+          isRuntime: true,
+          introducedBy: pkg('eslint'),
+          waived: [],
+          flags: [
+            {
+              kind: 'vulnerability',
+              vulnerabilities: [
+                {
+                  id: 'MINI-7',
+                  severity: 'critical',
+                  summary: 'critical vuln',
+                  fixAvailable: true,
+                },
+                {
+                  id: 'MINI-8',
+                  severity: 'critical',
+                  summary: 'critical vuln',
+                  fixAvailable: true,
+                },
+                {
+                  id: 'MINI-9',
+                  severity: 'critical',
+                  summary: 'critical vuln',
+                  fixAvailable: true,
+                },
+              ],
+            },
+            { kind: 'install-scripts', scripts: ['prepare'] },
+          ],
+        }),
+        makeFinding({
+          name: pkg('minimatch-d'),
+          version: '1.0.0',
+          isDirect: false,
+          isRuntime: true,
+          introducedBy: pkg('eslint'),
+          waived: [],
+          flags: [
+            {
+              kind: 'vulnerability',
+              vulnerabilities: [
+                {
+                  id: 'MINI-10',
+                  severity: 'critical',
+                  summary: 'critical vuln',
+                  fixAvailable: true,
+                },
+                {
+                  id: 'MINI-11',
+                  severity: 'critical',
+                  summary: 'critical vuln',
+                  fixAvailable: true,
+                },
+                {
+                  id: 'MINI-12',
+                  severity: 'critical',
+                  summary: 'critical vuln',
+                  fixAvailable: true,
+                },
+              ],
+            },
+            { kind: 'install-scripts', scripts: ['prepare'] },
+          ],
+        }),
+        makeFinding({
+          name: pkg('minimatch-e'),
+          version: '1.0.0',
+          isDirect: false,
+          isRuntime: true,
+          introducedBy: pkg('eslint'),
+          waived: [],
+          flags: [
+            {
+              kind: 'vulnerability',
+              vulnerabilities: [
+                {
+                  id: 'MINI-13',
+                  severity: 'critical',
+                  summary: 'critical vuln',
+                  fixAvailable: true,
+                },
+                {
+                  id: 'MINI-14',
+                  severity: 'critical',
+                  summary: 'critical vuln',
+                  fixAvailable: true,
+                },
+                {
+                  id: 'MINI-15',
+                  severity: 'critical',
+                  summary: 'critical vuln',
+                  fixAvailable: true,
+                },
+              ],
+            },
+            { kind: 'install-scripts', scripts: ['prepare'] },
+          ],
+        }),
+      ]),
+      DEFAULT_POLICY,
+    )
+
+    expect(output).toContain(
+      'Start with next@16.1.6; it is a direct dependency with blocking findings.',
+    )
+    expect(output).toContain('next@16.1.6')
+    expect(output).toContain('(Direct dependency)')
+  })
+
   it('shows a clean direct-dependency review section when no findings exist', () => {
     const output = formatScan(
       makeAnalysis(

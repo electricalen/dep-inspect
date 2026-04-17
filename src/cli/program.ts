@@ -1,4 +1,5 @@
 import { Command } from 'commander'
+import packageJson from '../../package.json'
 
 import { cacheClearCommand, cacheStatsCommand } from './commands/cache.cmd.js'
 import { ciCommand } from './commands/ci.cmd.js'
@@ -12,7 +13,7 @@ export function createProgram(): Command {
   const program = new Command()
     .name('dep-inspect')
     .description('Analyze npm dependencies for risk signals and enforce policy')
-    .version('0.1.0')
+    .version(packageJson.version)
 
   program
     .command('inspect <package>')

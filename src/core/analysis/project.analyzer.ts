@@ -169,6 +169,7 @@ interface UniquePackage {
 function collectUniquePackages(graph: DepGraph): UniquePackage[] {
   const packages: UniquePackage[] = []
   const seen = new Set<string>()
+  const reverseEdges = buildReverseEdges(graph)
 
   for (const [key, node] of graph.allNodes()) {
     const id = `${node.name}@${node.version}`
@@ -178,7 +179,7 @@ function collectUniquePackages(graph: DepGraph): UniquePackage[] {
     // For transitive deps, find the direct dep that introduced them
     let introducedBy: string | undefined
     if (!node.isDirect) {
-      introducedBy = findIntroducer(key, graph)
+      introducedBy = findIntroducer(key, graph, reverseEdges)
     }
 
     packages.push({
@@ -194,38 +195,49 @@ function collectUniquePackages(graph: DepGraph): UniquePackage[] {
 
 /**
  * Walk up from a transitive dep to find which direct dep introduced it.
- * Uses BFS over reverse edges (parents).
+ * Uses BFS over reverse edges (parents) to find the nearest direct ancestor.
  */
-function findIntroducer(targetKey: string, graph: DepGraph): string | undefined {
-  // Build reverse adjacency: for each node, find which nodes have it as a child
-  const allNodes = graph.allNodes()
+function findIntroducer(
+  targetKey: string,
+  graph: DepGraph,
+  reverseEdges: ReadonlyMap<string, readonly string[]>,
+): string | undefined {
+  const visited = new Set<string>([targetKey])
+  const queue = [...(reverseEdges.get(targetKey) ?? [])]
 
-  for (const [parentKey, parentNode] of allNodes) {
-    if (!parentNode.isDirect) continue
-    if (containsTransitively(targetKey, parentKey, graph, new Set())) {
-      return parentNode.name
+  while (queue.length > 0) {
+    const current = queue.shift()
+    if (!current) break
+    if (visited.has(current)) continue
+    visited.add(current)
+
+    const node = graph.getNode(current)
+    if (node?.isDirect) {
+      return node.name
+    }
+
+    for (const parentKey of reverseEdges.get(current) ?? []) {
+      if (!visited.has(parentKey)) {
+        queue.push(parentKey)
+      }
     }
   }
 
   return undefined
 }
 
-/** Check if target is reachable from source via DFS. */
-function containsTransitively(
-  target: string,
-  source: string,
-  graph: DepGraph,
-  visited: Set<string>,
-): boolean {
-  if (source === target) return true
-  if (visited.has(source)) return false
-  visited.add(source)
+function buildReverseEdges(graph: DepGraph): ReadonlyMap<string, readonly string[]> {
+  const reverseEdges = new Map<string, string[]>()
 
-  for (const childKey of graph.childrenOf(source)) {
-    if (containsTransitively(target, childKey, graph, visited)) return true
+  for (const [parentKey] of graph.allNodes()) {
+    for (const childKey of graph.childrenOf(parentKey)) {
+      const parents = reverseEdges.get(childKey) ?? []
+      parents.push(parentKey)
+      reverseEdges.set(childKey, parents)
+    }
   }
 
-  return false
+  return reverseEdges
 }
 
 /** Internal context for analyzing packages. */

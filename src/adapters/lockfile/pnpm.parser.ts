@@ -10,6 +10,7 @@ import type { LockfileData, LockfilePackage } from './lockfile.types.js'
 interface PnpmLockfile {
   lockfileVersion?: string | number
   packages?: Record<string, PnpmPackageEntry>
+  snapshots?: Record<string, PnpmPackageSnapshot>
 }
 
 interface PnpmPackageEntry {
@@ -20,6 +21,11 @@ interface PnpmPackageEntry {
   optional?: boolean
   hasBin?: boolean
   requiresBuild?: boolean
+}
+
+interface PnpmPackageSnapshot {
+  dependencies?: Record<string, string>
+  optionalDependencies?: Record<string, string>
 }
 
 /**
@@ -39,6 +45,13 @@ export function parsePnpmLockfile(filePath: FilePath): Result<LockfileData, Lock
     }
 
     const packages = new Map<string, LockfilePackage>()
+    const snapshotsByNormalizedKey = new Map<string, PnpmPackageSnapshot>()
+
+    for (const [snapshotPath, snapshot] of Object.entries(lock.snapshots ?? {})) {
+      const parsed = parsePnpmPackagePath(snapshotPath)
+      if (!parsed) continue
+      snapshotsByNormalizedKey.set(`${parsed.name}@${parsed.version}`, snapshot)
+    }
 
     for (const [pkgPath, entry] of Object.entries(lock.packages)) {
       const parsed = parsePnpmPackagePath(pkgPath)
@@ -46,13 +59,14 @@ export function parsePnpmLockfile(filePath: FilePath): Result<LockfileData, Lock
 
       const key = `${parsed.name}@${parsed.version}`
       if (packages.has(key)) continue
+      const snapshot = snapshotsByNormalizedKey.get(key)
 
       packages.set(key, {
         name: parsed.name,
         version: parsed.version,
         integrity: entry.resolution?.integrity,
-        dependencies: entry.dependencies,
-        optionalDependencies: entry.optionalDependencies,
+        dependencies: snapshot?.dependencies ?? entry.dependencies,
+        optionalDependencies: snapshot?.optionalDependencies ?? entry.optionalDependencies,
         dev: entry.dev === true,
         optional: entry.optional === true,
         hasInstallScript: entry.requiresBuild === true,
@@ -87,21 +101,21 @@ function parsePnpmPackagePath(pkgPath: string): { name: string; version: string 
 
   // Handle scoped packages: @scope/name@version or @scope/name/version
   if (path.startsWith('@')) {
-    // Find the second @ or / that separates name from version
-    const slashIdx = path.indexOf('/', path.indexOf('/') + 1)
-    const atIdx = path.lastIndexOf('@')
+    const scopeSlashIdx = path.indexOf('/')
+    const atIdx = path.indexOf('@', scopeSlashIdx + 1)
+    const slashIdx = path.indexOf('/', scopeSlashIdx + 1)
 
-    if (atIdx > 0 && atIdx > path.indexOf('/')) {
+    if (atIdx > 0) {
       return {
         name: path.slice(0, atIdx),
-        version: path.slice(atIdx + 1),
+        version: stripPeerSuffix(path.slice(atIdx + 1)),
       }
     }
 
     if (slashIdx > 0) {
       return {
         name: path.slice(0, slashIdx),
-        version: path.slice(slashIdx + 1),
+        version: stripPeerSuffix(path.slice(slashIdx + 1)),
       }
     }
 
@@ -109,11 +123,11 @@ function parsePnpmPackagePath(pkgPath: string): { name: string; version: string 
   }
 
   // Unscoped: name@version or name/version
-  const atIdx = path.lastIndexOf('@')
+  const atIdx = path.indexOf('@')
   if (atIdx > 0) {
     return {
       name: path.slice(0, atIdx),
-      version: path.slice(atIdx + 1),
+      version: stripPeerSuffix(path.slice(atIdx + 1)),
     }
   }
 
@@ -121,9 +135,14 @@ function parsePnpmPackagePath(pkgPath: string): { name: string; version: string 
   if (slashIdx > 0) {
     return {
       name: path.slice(0, slashIdx),
-      version: path.slice(slashIdx + 1),
+      version: stripPeerSuffix(path.slice(slashIdx + 1)),
     }
   }
 
   return null
+}
+
+function stripPeerSuffix(version: string): string {
+  const peerIdx = version.indexOf('(')
+  return peerIdx === -1 ? version : version.slice(0, peerIdx)
 }

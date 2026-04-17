@@ -550,6 +550,7 @@ export function formatScan(
   const directFindings = actionableFindings.filter((finding) => finding.isDirect)
   const transitiveFindings = actionableFindings.filter((finding) => !finding.isDirect)
   const topFlagCounts = summarizeTopFlagCounts(actionableFindings)
+  const reviewFindings = selectReviewFindings(actionableFindings, severityMap)
 
   lines.push('')
   lines.push(chalk.bold('Dependency scan'))
@@ -589,7 +590,7 @@ export function formatScan(
   if (actionableFindings.length === 0) {
     lines.push(`  ${CHECK} No actionable dependency findings detected`)
   } else {
-    for (const [index, finding] of actionableFindings.slice(0, 5).entries()) {
+    for (const [index, finding] of reviewFindings.entries()) {
       lines.push(...formatScanReviewCard(index + 1, finding, severityMap))
       lines.push('')
     }
@@ -957,7 +958,7 @@ function formatScanReviewCard(
 function formatActionableFlagSummary(flag: Flag): string {
   switch (flag.kind) {
     case 'vulnerability':
-      return `${flag.vulnerabilities.length} known vulnerability${flag.vulnerabilities.length === 1 ? '' : 'ies'}`
+      return `${flag.vulnerabilities.length} known vulnerabilit${flag.vulnerabilities.length === 1 ? 'y' : 'ies'}`
     case 'deprecated':
       return 'deprecated by maintainer'
     case 'license-violation':
@@ -1049,6 +1050,33 @@ function formatSuggestedNextStep(
   }
 
   return 'Review the highest-severity transitive packages, then open --details for the full dependency breakdown.'
+}
+
+function selectReviewFindings(
+  findings: readonly PackageFinding[],
+  severityMap: Record<FlagKind, Severity>,
+): PackageFinding[] {
+  if (findings.length <= 5) return findings.slice()
+
+  const directCritical = findings.find(
+    (finding) =>
+      finding.isDirect && finding.flags.some((flag) => severityMap[flag.kind] === 'critical'),
+  )
+  if (!directCritical) {
+    return findings.slice(0, 5)
+  }
+
+  const topFindings = findings.slice(0, 5)
+  if (
+    topFindings.some(
+      (finding) =>
+        finding.name === directCritical.name && finding.version === directCritical.version,
+    )
+  ) {
+    return topFindings
+  }
+
+  return [directCritical, ...findings.filter((finding) => finding !== directCritical).slice(0, 4)]
 }
 
 function formatDeniedLicenseMessage(license: string | null): string {
