@@ -51,7 +51,7 @@
   "license": "MIT",
   "dependencies": {
     "@commander-js/extra-typings": "^14.0.0",
-    "better-sqlite3": "^11.8.1",
+    "better-sqlite3": "^12.9.0",
     "chalk": "^5.4.1",
     "commander": "^14.0.0",
     "neverthrow": "^8.2.0",
