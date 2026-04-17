@@ -1,0 +1,34 @@
+name: Feature request
+description: Propose a new capability or a meaningful change in behavior
+title: 'feat: '
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for new checks, policy changes, CLI workflow improvements, or documentation changes that affect users.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: Describe the current gap or pain point.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: Describe the behavior you want and how users would interact with it.
+    validations:
+      required: true
+  - type: textarea
+    id: tradeoffs
+    attributes:
+      label: Tradeoffs and alternatives
+      description: Note any false-positive risk, compatibility concerns, or alternatives considered.
+  - type: textarea
+    id: examples
+    attributes:
+      label: Examples or references
+      description: Include sample packages, policy snippets, or output examples if relevant.

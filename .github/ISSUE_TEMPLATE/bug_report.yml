@@ -1,0 +1,66 @@
+name: Bug report
+description: Report a defect in dep-inspect behavior
+title: 'bug: '
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for reproducible defects in CLI behavior, analysis results, packaging, or documentation.
+  - type: textarea
+    id: what_happened
+    attributes:
+      label: What happened?
+      description: Describe the observed behavior and why it is incorrect.
+      placeholder: dep-inspect scan reported...
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Provide exact commands, package names, lockfiles, or fixture details needed to reproduce.
+      placeholder: |
+        1. Run ...
+        2. Use package ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      placeholder: The command should...
+    validations:
+      required: true
+  - type: input
+    id: node_version
+    attributes:
+      label: Node.js version
+      placeholder: 20.18.0
+    validations:
+      required: true
+  - type: input
+    id: package_manager
+    attributes:
+      label: Package manager and lockfile
+      placeholder: pnpm 10 with pnpm-lock.yaml
+    validations:
+      required: true
+  - type: dropdown
+    id: github_enabled
+    attributes:
+      label: Was GitHub data enabled?
+      options:
+        - 'yes'
+        - 'no'
+        - not sure
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant output
+      description: Paste CLI output, stack traces, or JSON results.
+      render: text

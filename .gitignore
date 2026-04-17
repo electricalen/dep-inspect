@@ -1,0 +1,9 @@
+node_modules/
+dist/
+*.tsbuildinfo
+coverage/
+.env
+.env.local
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
