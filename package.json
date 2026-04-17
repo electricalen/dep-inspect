@@ -1,6 +1,6 @@
 {
   "name": "dep-inspect",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A dependency red flag analyzer and policy enforcement tool for npm projects",
   "type": "module",
   "bin": {
@@ -51,6 +51,7 @@
   "license": "MIT",
   "dependencies": {
     "@commander-js/extra-typings": "^14.0.0",
+    "@yarnpkg/lockfile": "^1.1.0",
     "better-sqlite3": "^11.8.1",
     "chalk": "^5.4.1",
     "commander": "^14.0.0",
@@ -67,7 +68,6 @@
     "@types/node": "^25.6.0",
     "@types/semver": "^7.7.0",
     "@vitest/coverage-v8": "^3.1.1",
-    "@yarnpkg/lockfile": "^1.1.0",
     "eslint": "^9.25.0",
     "husky": "^9.1.7",
     "lint-staged": "^15.5.0",
