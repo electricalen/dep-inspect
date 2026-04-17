@@ -2,7 +2,7 @@ import type { PackageAnalysis } from '../../core/analysis/package.analyzer.js'
 import type { ProjectAnalysis } from '../../core/analysis/project.analyzer.js'
 import { FLAG_METADATA } from '../../core/flags/flag.registry.js'
 import type { Flag, FlagKind, PackageFinding } from '../../core/flags/flag.types.js'
-import { buildSeverityMap } from '../../core/policy/policy.evaluator.js'
+import { buildSeverityMap, getFlagSeverity } from '../../core/policy/policy.evaluator.js'
 import type { PolicyConfig } from '../../core/policy/policy.types.js'
 import type { Severity } from '../../shared/types.js'
 
@@ -92,7 +92,7 @@ export function formatInspectJson(analysis: PackageAnalysis, policy: PolicyConfi
       weeklyDownloads: downloads?.weekly ?? null,
       repositoryUrl: metadata.repository?.url ?? null,
     },
-    flags: activeFlags.map((f) => toJsonFlag(f, severityMap)),
+    flags: activeFlags.map((f) => toJsonFlag(f, severityMap, true)),
     github: github
       ? {
           owner: github.owner,
@@ -107,7 +107,7 @@ export function formatInspectJson(analysis: PackageAnalysis, policy: PolicyConfi
           commitsLast12Months: github.commitsLast12Months,
         }
       : null,
-    riskLevel: findMaxSeverity(activeFlags, severityMap),
+    riskLevel: findMaxSeverity(activeFlags, severityMap, true),
     vulnQueryFailed: analysis.vulnQueryFailed,
   }
 
@@ -169,7 +169,9 @@ export function formatDeepInspectJson(
   )
 
   const criticalPackages = policyResult.findings
-    .filter((f) => f.flags.some((fl) => severityMap[fl.kind] === 'critical'))
+    .filter((f) =>
+      f.flags.some((fl) => getFlagSeverity(fl, severityMap, f.isDirect) === 'critical'),
+    )
     .map((f) => {
       const loc =
         f.name === rootName && f.version === rootVersion
@@ -182,8 +184,8 @@ export function formatDeepInspectJson(
         version: f.version,
         location: loc,
         flags: f.flags
-          .filter((fl) => severityMap[fl.kind] === 'critical')
-          .map((fl) => toJsonFlag(fl, severityMap)),
+          .filter((fl) => getFlagSeverity(fl, severityMap, f.isDirect) === 'critical')
+          .map((fl) => toJsonFlag(fl, severityMap, f.isDirect)),
       }
     })
 
@@ -213,7 +215,7 @@ export function formatDeepInspectJson(
       vulnQueryFailures: scanStats.vulnQueryFailures,
     },
     dependencyFindings: dependencyFindings.map((f) => toJsonFinding(f, severityMap)),
-    treeFlags: treeFlags.map((f) => toJsonFlag(f, severityMap)),
+    treeFlags: treeFlags.map((f) => toJsonFlag(f, severityMap, true)),
     combinedSummary: {
       criticalCount: policyResult.criticalCount,
       warningCount: policyResult.warningCount,
@@ -243,7 +245,7 @@ export function formatScanJson(analysis: ProjectAnalysis, policy: PolicyConfig):
       status: policyResult.status,
     },
     findings: policyResult.findings.map((f) => toJsonFinding(f, severityMap)),
-    treeFlags: treeFlags.map((f) => toJsonFlag(f, severityMap)),
+    treeFlags: treeFlags.map((f) => toJsonFlag(f, severityMap, true)),
   }
 
   return JSON.stringify(output, null, 2)
@@ -251,7 +253,11 @@ export function formatScanJson(analysis: ProjectAnalysis, policy: PolicyConfig):
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function toJsonFlag(flag: Flag, severityMap: Record<FlagKind, Severity>): JsonFlag {
+function toJsonFlag(
+  flag: Flag,
+  severityMap: Record<FlagKind, Severity>,
+  isDirect: boolean,
+): JsonFlag {
   const meta = FLAG_METADATA[flag.kind]
   const { kind, ...details } = flag
   const signalType =
@@ -265,7 +271,7 @@ function toJsonFlag(flag: Flag, severityMap: Record<FlagKind, Severity>): JsonFl
 
   return {
     kind,
-    severity: severityMap[kind],
+    severity: getFlagSeverity(flag, severityMap, isDirect),
     signalType,
     label: meta.label,
     description: meta.description,
@@ -283,20 +289,21 @@ function toJsonFinding(
     isDirect: finding.isDirect,
     isRuntime: finding.isRuntime,
     introducedBy: finding.introducedBy ?? null,
-    flags: finding.flags.map((f) => toJsonFlag(f, severityMap)),
+    flags: finding.flags.map((f) => toJsonFlag(f, severityMap, finding.isDirect)),
     waived: finding.waived.map((w) => ({ flag: w.flag, reason: w.reason })),
-    highestSeverity: findMaxSeverity(finding.flags, severityMap),
+    highestSeverity: findMaxSeverity(finding.flags, severityMap, finding.isDirect),
   }
 }
 
 function findMaxSeverity(
   flags: readonly Flag[],
   severityMap: Record<FlagKind, Severity>,
+  isDirect: boolean,
 ): Severity {
   if (flags.length === 0) return 'info'
   let max: Severity = 'info'
   for (const flag of flags) {
-    const sev = severityMap[flag.kind]
+    const sev = getFlagSeverity(flag, severityMap, isDirect)
     if (sev === 'critical') return 'critical'
     if (sev === 'warning') max = 'warning'
   }

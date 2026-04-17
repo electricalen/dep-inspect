@@ -77,6 +77,68 @@ export function buildSeverityMap(config: PolicyConfig): Record<FlagKind, Severit
   return map
 }
 
+function minSeverity(a: Severity, b: Severity): Severity {
+  return SEVERITY_ORDER[a] <= SEVERITY_ORDER[b] ? a : b
+}
+
+function resolveVulnerabilitySeverity(
+  flag: Extract<Flag, { kind: 'vulnerability' }>,
+  isDirect: boolean,
+) {
+  const highestAdvisory = flag.vulnerabilities.reduce<'critical' | 'high' | 'medium' | 'low'>(
+    (highest, advisory) =>
+      advisory.severity === 'critical' ||
+      (highest !== 'critical' &&
+        (advisory.severity === 'high' || (highest === 'low' && advisory.severity === 'medium')))
+        ? advisory.severity
+        : highest,
+    'low',
+  )
+
+  switch (highestAdvisory) {
+    case 'critical':
+    case 'high':
+      return 'critical' as const
+    case 'medium':
+      return 'warning' as const
+    case 'low':
+      return isDirect ? ('warning' as const) : ('info' as const)
+  }
+}
+
+/** Resolve the effective severity for an individual flag within a finding. */
+export function getFlagSeverity(
+  flag: Flag,
+  severityMap: Record<FlagKind, Severity>,
+  isDirect: boolean,
+): Severity {
+  const baseSeverity =
+    flag.kind !== 'vulnerability'
+      ? severityMap[flag.kind]
+      : minSeverity(resolveVulnerabilitySeverity(flag, isDirect), severityMap.vulnerability)
+
+  // Transitive findings are review signals, not blockers.
+  if (!isDirect) {
+    return minSeverity(baseSeverity, 'warning')
+  }
+
+  return baseSeverity
+}
+
+/** Resolve the effective severity for a finding from its active flags. */
+export function getFindingSeverity(
+  finding: Pick<PackageFinding, 'flags' | 'isDirect'>,
+  severityMap: Record<FlagKind, Severity>,
+): Severity {
+  let highest: Severity = 'info'
+  for (const flag of finding.flags) {
+    const severity = getFlagSeverity(flag, severityMap, finding.isDirect)
+    if (severity === 'critical') return 'critical'
+    if (severity === 'warning') highest = 'warning'
+  }
+  return highest
+}
+
 /**
  * Apply policy to raw flags for a single package.
  * Filters out disabled flags, applies waivers, and classifies severity.
@@ -145,7 +207,7 @@ export function evaluatePolicy(
 
   for (const finding of findings) {
     for (const flag of finding.flags) {
-      const severity = severityMap[flag.kind]
+      const severity = getFlagSeverity(flag, severityMap, finding.isDirect)
       switch (severity) {
         case 'critical':
           criticalCount++

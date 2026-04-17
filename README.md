@@ -59,9 +59,17 @@ Those checks are useful in some teams, but they are intentionally not part of th
 
 Default policy severity is:
 
-- `critical`: vulnerabilities, deprecated packages, license violations
+- `critical`: high/critical vulnerabilities, deprecated packages, license violations
 - `warning`: install scripts, unmaintained packages
 - `off` by default unless enabled with `--strict` or policy overrides: single maintainer, license risk, dependency footprint, missing repository, version risk
+
+Vulnerability findings are severity-aware:
+
+- high/critical advisories stay `critical`
+- medium advisories become `warning`
+- low advisories become `warning` for direct dependencies and `info` for transitives
+- transitive issues are still scanned, but they are capped at `warning` by default and shown under the direct dependency that introduces them
+- by default, only direct dependency findings can block because non-direct findings are capped at `warning`
 
 The reasoning behind those defaults is simple:
 
@@ -178,7 +186,7 @@ If you want every category and package detail, use `--details`.
 
 Flags are evidence-based and category-specific rather than score-based.
 
-- Vulnerability: OSV returned one or more advisories for the exact package version
+- Vulnerability: OSV returned one or more advisories for the exact package version; the reported severity is derived from the highest advisory severity and whether the package is direct or transitive
 - Deprecated: the npm package metadata includes a maintainer deprecation notice
 - License violation: the package license is denied, missing, or not allowed by policy
 - Install scripts: the package runs install lifecycle scripts that execute during dependency installation

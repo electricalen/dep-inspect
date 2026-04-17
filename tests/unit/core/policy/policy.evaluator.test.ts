@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   applyPolicyToPackage,
+  getFlagSeverity,
   evaluatePolicy,
   buildSeverityMap,
 } from '../../../../src/core/policy/policy.evaluator.js'
@@ -143,5 +144,77 @@ describe('evaluatePolicy', () => {
     expect(result.criticalCount).toBe(1)
     expect(result.warningCount).toBe(1)
     expect(result.infoCount).toBe(1)
+  })
+
+  it('downgrades medium vulnerabilities to warnings', () => {
+    const severityMap = buildSeverityMap(DEFAULT_POLICY)
+    const severity = getFlagSeverity(
+      {
+        kind: 'vulnerability',
+        vulnerabilities: [
+          {
+            id: 'OSV-1',
+            severity: 'medium',
+            summary: 'medium issue',
+            fixAvailable: true,
+          },
+        ],
+      },
+      severityMap,
+      true,
+    )
+
+    expect(severity).toBe('warning')
+  })
+
+  it('downgrades low transitive vulnerabilities to info', () => {
+    const severityMap = buildSeverityMap(DEFAULT_POLICY)
+    const severity = getFlagSeverity(
+      {
+        kind: 'vulnerability',
+        vulnerabilities: [
+          {
+            id: 'OSV-LOW',
+            severity: 'low',
+            summary: 'low issue',
+            fixAvailable: false,
+          },
+        ],
+      },
+      severityMap,
+      false,
+    )
+
+    expect(severity).toBe('info')
+  })
+
+  it('caps transitive deprecated findings at warning', () => {
+    const severityMap = buildSeverityMap(DEFAULT_POLICY)
+    const severity = getFlagSeverity(
+      { kind: 'deprecated', reason: 'deprecated transitive' },
+      severityMap,
+      false,
+    )
+
+    expect(severity).toBe('warning')
+  })
+
+  it('does not fail on transitive-only critical defaults when failOn is critical', () => {
+    const findings: PackageFinding[] = [
+      {
+        name: pkg('transitive-pkg'),
+        version: '1.0.0',
+        flags: [{ kind: 'deprecated', reason: 'deprecated transitive' }],
+        isDirect: false,
+        isRuntime: true,
+        introducedBy: pkg('direct-pkg'),
+        waived: [],
+      },
+    ]
+
+    const result = evaluatePolicy(findings, DEFAULT_POLICY)
+    expect(result.status).toBe('pass')
+    expect(result.criticalCount).toBe(0)
+    expect(result.warningCount).toBe(1)
   })
 })

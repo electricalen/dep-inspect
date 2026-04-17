@@ -163,12 +163,13 @@ describe('formatScan', () => {
     expect(output).toContain('Review These First')
     expect(output).toContain('request@2.88.2')
     expect(output).toContain('(Direct dependency)')
-    expect(output).toContain('deprecated by maintainer')
-    expect(output).toContain('build-tool@2.0.0')
-    expect(output).toContain('(Transitive via firebase-admin)')
-    expect(output).toContain('postinstall install hook')
+    expect(output).toContain('direct: deprecated')
+    expect(output).toContain('firebase-admin@11.0.0')
+    expect(output).toContain('transitive: 1 issue')
+    expect(output).toContain('build-tool (runs install-time scripts)')
     expect(output).toContain('Suggested Next Step')
-    expect(output).toContain('Use --details for the full package-by-package breakdown')
+    expect(output).toContain('Start with request@2.88.2.')
+    expect(output).toContain('use --details for full breakdown')
     expect(output).not.toContain('Dependency Summary')
     expect(output).not.toContain('Top Indirect Package Risks')
   })
@@ -230,14 +231,14 @@ describe('formatScan', () => {
     expect(output).toContain('Dependencies You Added')
     expect(output).toContain('request@2.88.2')
     expect(output).toContain('- deprecated')
-    expect(output).toContain('- used in production')
+    expect(output).toContain('- production')
     expect(output).toContain('some-sdk@1.3.0')
     expect(output).toContain('- no recent release')
     expect(output).toContain('- low maintainer coverage')
-    expect(output).toContain('- 1 indirect package with issues')
-    expect(output).toContain('includes deprecated package: left-pad')
+    expect(output).toContain('- 1 indirect issue')
+    expect(output).toContain('- left-pad (deprecated)')
     expect(output).toContain('firebase-admin@11.0.0')
-    expect(output).toContain('includes runs install-time scripts package: build-tool')
+    expect(output).toContain('- build-tool (runs install-time scripts)')
     expect(output).toContain('Issues From Indirect Packages')
     expect(output).toContain('2 direct dependencies introduce indirect packages with issues')
     expect(output).toContain('Top Indirect Package Risks')
@@ -463,11 +464,12 @@ describe('formatScan', () => {
       DEFAULT_POLICY,
     )
 
-    expect(output).toContain(
-      'Start with next@16.1.6; it is a direct dependency with blocking findings.',
-    )
+    expect(output).toContain('Start with next@16.1.6.')
+    expect(output).toContain('⚠ eslint@unknown (Direct dependency)')
     expect(output).toContain('next@16.1.6')
+    expect(output).toContain('transitive: 6 issues')
     expect(output).toContain('(Direct dependency)')
+    expect(output).toContain('direct: 1 known vulnerability (1 critical)')
   })
 
   it('shows a clean direct-dependency review section when no findings exist', () => {
@@ -495,5 +497,43 @@ describe('formatScan', () => {
     expect(output).toContain('No direct dependencies require review')
     expect(output).not.toContain('Top Indirect Package Risks')
     expect(output).not.toContain('Issues From Indirect Packages')
+  })
+
+  it('does not create review cards for info-only direct findings', () => {
+    const analysis = makeAnalysis(
+      [
+        makeFinding({
+          name: pkg('request'),
+          version: '2.88.2',
+          isDirect: true,
+          isRuntime: true,
+          waived: [],
+          flags: [{ kind: 'missing-repository', reason: 'no-field' }],
+        }),
+      ],
+      makeScanStats({
+        cleanPackages: 4,
+        flaggedPackages: 1,
+        flagCounts: { 'missing-repository': 1 },
+      }),
+    )
+
+    const output = formatScan(
+      {
+        ...analysis,
+        policyResult: {
+          ...analysis.policyResult,
+          status: 'pass',
+          criticalCount: 0,
+          warningCount: 0,
+          infoCount: 1,
+        },
+      },
+      DEFAULT_POLICY,
+    )
+
+    expect(output).toContain('No actionable dependency findings detected')
+    expect(output).toContain('Direct dependencies to review: 0')
+    expect(output).not.toContain('request@2.88.2 (Direct dependency)')
   })
 })

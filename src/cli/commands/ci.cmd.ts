@@ -17,7 +17,7 @@ interface CiOptions {
 
 /**
  * `dep-inspect ci` — CI gatekeeper.
- * Exit 0 on pass, 1 on critical findings, 2 on tool error.
+ * Exit 0 on pass, 1 on blocking findings, 2 on tool error.
  */
 export async function ciCommand(opts: CiOptions): Promise<void> {
   const projectDir = process.cwd()

@@ -15,11 +15,13 @@ Dependency risk tools typically use one of two approaches:
 
 Use **three discrete severity tiers** instead of numeric scores:
 
-- **Critical** — blocks CI, requires immediate action (vulnerabilities, deprecated, license violations)
+- **Critical** — blocks CI, requires immediate action (high/critical vulnerabilities, deprecated, license violations)
 - **Warning** — review recommended, may block CI depending on policy (install scripts, unmaintained, single maintainer)
 - **Info** — context for decision-making, never blocks CI (dependency footprint, version risk)
 
 Severity is configurable per-flag in `.dep-inspect.json`. Each flag has a default severity in `FLAG_METADATA`, but teams can override.
+Vulnerability severity is further derived from advisory severity so medium/low advisories do not automatically become critical findings.
+Non-direct findings are capped at warning by default, so only direct dependency findings can block under the standard policy.
 
 ## Consequences
 

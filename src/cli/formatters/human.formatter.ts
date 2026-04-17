@@ -4,7 +4,12 @@ import type { PackageAnalysis } from '../../core/analysis/package.analyzer.js'
 import type { ProjectAnalysis, ScanStatistics } from '../../core/analysis/project.analyzer.js'
 import { FLAG_METADATA } from '../../core/flags/flag.registry.js'
 import type { Flag, FlagKind, PackageFinding } from '../../core/flags/flag.types.js'
-import { buildSeverityMap, resolveThreshold } from '../../core/policy/policy.evaluator.js'
+import {
+  buildSeverityMap,
+  getFindingSeverity,
+  getFlagSeverity,
+  resolveThreshold,
+} from '../../core/policy/policy.evaluator.js'
 import type { PolicyConfig, PolicyResult } from '../../core/policy/policy.types.js'
 import type { GitHubRepoData } from '../../ports/github.port.js'
 import type { Severity } from '../../shared/types.js'
@@ -73,7 +78,7 @@ export function formatInspect(
   const severityMap = buildSeverityMap(policy)
   const activeFlags = finding?.flags ?? []
   const actionableFlags = sortFlagsBySeverity(
-    activeFlags.filter((flag) => severityMap[flag.kind] !== 'info'),
+    activeFlags.filter((flag) => getFlagSeverity(flag, severityMap, true) !== 'info'),
     severityMap,
   )
   const heuristicFlags = activeFlags.filter((flag) => HEURISTIC_FLAG_KINDS.has(flag.kind))
@@ -109,7 +114,7 @@ export function formatInspect(
     lines.push(formatSectionHeader('Review These Signals'))
     lines.push('')
     for (const flag of actionableFlags.slice(0, 5)) {
-      const sev = severityMap[flag.kind]
+      const sev = getFlagSeverity(flag, severityMap, true)
       lines.push(
         `  ${SEVERITY_ICON[sev]} ${FLAG_METADATA[flag.kind].label}: ${formatFlagOneLiner(flag)}`,
       )
@@ -259,20 +264,20 @@ export function formatDeepInspect(
 
   // ── Per-Category Verification Checklist ──
   lines.push('')
-  lines.push(...formatCategoryVerification(scanStats, severityMap))
+  lines.push(...formatCategoryVerification(scanStats, policyResult.findings, severityMap))
 
-  // ── Red Flags (critical + warnings in transitive deps) ──
+  // ── Dependency Findings ──
   const otherFindings = policyResult.findings.filter(
     (f) => !(f.name === rootName && f.version === rootVersion),
   )
 
   const criticalFindings = otherFindings.filter((f) =>
-    f.flags.some((fl) => severityMap[fl.kind] === 'critical'),
+    f.flags.some((fl) => getFlagSeverity(fl, severityMap, f.isDirect) === 'critical'),
   )
   const warningFindings = otherFindings.filter(
     (f) =>
-      !f.flags.some((fl) => severityMap[fl.kind] === 'critical') &&
-      f.flags.some((fl) => severityMap[fl.kind] === 'warning'),
+      !f.flags.some((fl) => getFlagSeverity(fl, severityMap, f.isDirect) === 'critical') &&
+      f.flags.some((fl) => getFlagSeverity(fl, severityMap, f.isDirect) === 'warning'),
   )
 
   if (criticalFindings.length > 0 || warningFindings.length > 0) {
@@ -287,7 +292,7 @@ export function formatDeepInspect(
           `  ${SEVERITY_ICON.critical} ${chalk.bold(`${f.name}@${f.version}`)} ${chalk.dim(`(${loc})`)}`,
         )
         for (const fl of f.flags) {
-          const sev = severityMap[fl.kind]
+          const sev = getFlagSeverity(fl, severityMap, f.isDirect)
           lines.push(
             `    ${SEVERITY_ICON[sev]} ${FLAG_METADATA[fl.kind].label}: ${formatFlagOneLiner(fl)}`,
           )
@@ -303,7 +308,7 @@ export function formatDeepInspect(
           `  ${SEVERITY_ICON.warning} ${chalk.bold(`${f.name}@${f.version}`)} ${chalk.dim(`(${loc})`)}`,
         )
         for (const fl of f.flags) {
-          const sev = severityMap[fl.kind]
+          const sev = getFlagSeverity(fl, severityMap, f.isDirect)
           lines.push(
             `    ${SEVERITY_ICON[sev]} ${FLAG_METADATA[fl.kind].label}: ${formatFlagOneLiner(fl)}`,
           )
@@ -314,7 +319,7 @@ export function formatDeepInspect(
 
   // ── Info-level findings (collapsed) ──
   const infoFindings = otherFindings.filter((f) =>
-    f.flags.every((fl) => severityMap[fl.kind] === 'info'),
+    f.flags.every((fl) => getFlagSeverity(fl, severityMap, f.isDirect) === 'info'),
   )
   if (infoFindings.length > 0) {
     lines.push('')
@@ -375,7 +380,7 @@ function formatDeepInspectSummary(
   const severityMap = buildSeverityMap(policy)
   const actionableFindings = sortFindingsBySeverity(
     projectAnalysis.policyResult.findings.filter((finding) =>
-      finding.flags.some((flag) => severityMap[flag.kind] !== 'info'),
+      finding.flags.some((flag) => getFlagSeverity(flag, severityMap, finding.isDirect) !== 'info'),
     ),
     severityMap,
   )
@@ -446,6 +451,7 @@ function formatScanStatsSummary(
  */
 function formatCategoryVerification(
   stats: ScanStatistics,
+  findings: readonly PackageFinding[],
   severityMap: Record<FlagKind, Severity>,
 ): string[] {
   const lines: string[] = []
@@ -500,10 +506,13 @@ function formatCategoryVerification(
         )
       }
     } else {
-      const maxSev = cat.kinds.reduce<Severity>((max, kind) => {
-        if ((stats.flagCounts[kind] ?? 0) > 0) {
-          const sev = severityMap[kind]
-          if (severityIsAtLeast(sev, max)) return sev
+      const maxSev = findings.reduce<Severity>((max, finding) => {
+        for (const flag of finding.flags) {
+          if (!cat.kinds.includes(flag.kind)) continue
+          const sev = getFlagSeverity(flag, severityMap, finding.isDirect)
+          if (severityIsAtLeast(sev, max)) {
+            max = sev
+          }
         }
         return max
       }, 'info')
@@ -543,14 +552,14 @@ export function formatScan(
   const severityMap = buildSeverityMap(policy)
   const actionableFindings = sortFindingsBySeverity(
     analysis.policyResult.findings.filter((finding) =>
-      finding.flags.some((flag) => severityMap[flag.kind] !== 'info'),
+      finding.flags.some((flag) => getFlagSeverity(flag, severityMap, finding.isDirect) !== 'info'),
     ),
     severityMap,
   )
-  const directFindings = actionableFindings.filter((finding) => finding.isDirect)
   const transitiveFindings = actionableFindings.filter((finding) => !finding.isDirect)
   const topFlagCounts = summarizeTopFlagCounts(actionableFindings)
-  const reviewFindings = selectReviewFindings(actionableFindings, severityMap)
+  const directSummaries = summarizeDirectDependencies(analysis, actionableFindings, severityMap)
+  const reviewSummaries = directSummaries.slice(0, 5)
 
   lines.push('')
   lines.push(chalk.bold('Dependency scan'))
@@ -565,7 +574,7 @@ export function formatScan(
     `  Scanned: ${analysis.scanStats.scannedSuccessfully}/${analysis.scanStats.totalPackages} packages · ${analysis.metrics.directCount} direct · ${analysis.metrics.transitiveCount} transitive`,
   )
   lines.push(
-    `  Packages with findings: ${directFindings.length} direct · ${transitiveFindings.length} transitive`,
+    `  Direct dependencies to review: ${directSummaries.length} · Indirect packages with issues: ${transitiveFindings.length}`,
   )
 
   if (analysis.scanStats.vulnQueryFailures.length > 0) {
@@ -587,23 +596,24 @@ export function formatScan(
   lines.push(formatSectionHeader('Review These First'))
   lines.push('')
 
-  if (actionableFindings.length === 0) {
+  if (reviewSummaries.length === 0) {
     lines.push(`  ${CHECK} No actionable dependency findings detected`)
   } else {
-    for (const [index, finding] of reviewFindings.entries()) {
-      lines.push(...formatScanReviewCard(index + 1, finding, severityMap))
+    for (const [index, summary] of reviewSummaries.entries()) {
+      lines.push(...formatDirectDependencyReviewCard(index + 1, summary))
       lines.push('')
     }
   }
 
   lines.push(formatSectionHeader('Suggested Next Step'))
   lines.push('')
-  lines.push(`  ${formatSuggestedNextStep(actionableFindings, severityMap)}`)
+  lines.push(`  ${formatSuggestedNextStep(reviewSummaries, directSummaries)}`)
   lines.push('')
   lines.push(
-    `  More to review: ${Math.max(0, directFindings.length - 3)} additional direct · ${Math.max(0, transitiveFindings.length - Math.max(0, 5 - Math.min(3, directFindings.length)))} additional transitive`,
+    chalk.dim(
+      `  +${Math.max(0, directSummaries.length - reviewSummaries.length)} more direct dependencies · use --details for full breakdown`,
+    ),
   )
-  lines.push(chalk.dim('  Use --details for the full package-by-package breakdown.'))
   lines.push('')
 
   return lines.join('\n')
@@ -613,7 +623,7 @@ function formatScanDetails(analysis: ProjectAnalysis, policy: PolicyConfig): str
   const lines: string[] = []
   const { metrics, policyResult, treeFlags } = analysis
   const severityMap = buildSeverityMap(policy)
-  const directSummaries = summarizeDirectDependencies(analysis, severityMap)
+  const directSummaries = summarizeDirectDependencies(analysis, policyResult.findings, severityMap)
   const transitiveSummary = summarizeTransitiveInfluence(policyResult.findings)
   const topTransitiveRisks = summarizeTopTransitiveRisks(policyResult.findings, severityMap)
   const deprecatedCount = analysis.scanStats.flagCounts.deprecated ?? 0
@@ -646,7 +656,11 @@ function formatScanDetails(analysis: ProjectAnalysis, policy: PolicyConfig): str
   } else {
     for (const [index, summary] of directSummaries.entries()) {
       lines.push(`  ${index + 1}. ${chalk.bold(`${summary.name}@${summary.version}`)}`)
-      for (const detail of summary.details) {
+      for (const detail of [
+        ...summary.directDetails,
+        formatTransitiveCount(summary.transitiveCount),
+        ...summary.transitiveDetails,
+      ].filter(Boolean)) {
         lines.push(`     - ${detail}`)
       }
       lines.push('')
@@ -696,8 +710,12 @@ function formatScanDetails(analysis: ProjectAnalysis, policy: PolicyConfig): str
 interface DirectDependencySummary {
   readonly name: string
   readonly version: string
-  readonly details: readonly string[]
+  readonly directDetails: readonly string[]
+  readonly transitiveDetails: readonly string[]
+  readonly transitiveCount: number
   readonly score: number
+  readonly directSeverity: Severity
+  readonly transitiveSeverity: Severity
 }
 
 interface TopTransitiveRiskSummary {
@@ -709,6 +727,7 @@ interface TopTransitiveRiskSummary {
 
 function summarizeDirectDependencies(
   analysis: ProjectAnalysis,
+  findings: readonly PackageFinding[],
   severityMap: Record<FlagKind, Severity>,
 ): DirectDependencySummary[] {
   const directNodes = new Map([...analysis.graph.directDeps()].map(([, node]) => [node.name, node]))
@@ -717,7 +736,7 @@ function summarizeDirectDependencies(
     { direct?: PackageFinding; transitives: PackageFinding[] }
   >()
 
-  for (const finding of analysis.policyResult.findings) {
+  for (const finding of findings) {
     const bucketKey = finding.isDirect ? finding.name : finding.introducedBy
     if (!bucketKey) continue
 
@@ -734,35 +753,43 @@ function summarizeDirectDependencies(
     .map(([name, bucket]) => {
       const directNode = directNodes.get(name)
       const directFinding = bucket.direct
-      const details: string[] = []
+      const directDetails: string[] = []
+      const transitiveDetails: string[] = []
 
       for (const flag of directFinding?.flags ?? []) {
-        details.push(formatScanFlagSummary(flag))
+        directDetails.push(formatScanFlagSummary(flag))
       }
 
       if (directNode) {
-        details.push(directNode.isRuntime ? 'used in production' : 'development-only dependency')
+        directDetails.push(directNode.isRuntime ? 'production' : 'dev-only')
       }
 
       if (bucket.transitives.length > 0) {
-        details.push(formatTransitiveCount(bucket.transitives.length))
-
         const notable = bucket.transitives
           .slice()
           .sort((a, b) => compareFindingsBySeverity(a, b, severityMap))
           .slice(0, 2)
-          .map((finding) => `includes ${formatScanFindingSummary(finding)}`)
+          .map((finding) => formatScanFindingSummary(finding))
 
-        details.push(...notable)
+        transitiveDetails.push(...notable)
       }
 
       return {
         name,
         version: directFinding?.version ?? directNode?.version ?? 'unknown',
-        details,
+        directDetails,
+        transitiveDetails,
+        transitiveCount: bucket.transitives.length,
         score:
           scoreFindingSet(directFinding?.flags ?? [], severityMap) +
           scoreTransitives(bucket.transitives, severityMap),
+        directSeverity: bucket.direct ? getFindingSeverity(bucket.direct, severityMap) : 'info',
+        transitiveSeverity: bucket.transitives.reduce<Severity>((highest, finding) => {
+          const severity = getFindingSeverity(finding, severityMap)
+          if (severity === 'critical') return 'critical'
+          if (severity === 'warning' && highest === 'info') return 'warning'
+          return highest
+        }, 'info'),
       }
     })
     .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
@@ -830,11 +857,11 @@ function summarizeTopTransitiveRisks(
 }
 
 function formatTransitiveCount(count: number): string {
-  return `${count} indirect package${count === 1 ? '' : 's'} with issues`
+  return `${count} indirect issue${count === 1 ? '' : 's'}`
 }
 
 function formatScanFindingSummary(finding: PackageFinding): string {
-  return `${formatScanFlagsInline(finding.flags)} package: ${finding.name}`
+  return `${finding.name} (${formatScanFlagsInline(finding.flags)})`
 }
 
 function formatScanFlagsInline(flags: readonly Flag[]): string {
@@ -852,7 +879,7 @@ function formatScanFlagSummary(flag: Flag): string {
     case 'install-scripts':
       return 'runs install-time scripts'
     case 'vulnerability':
-      return `${flag.vulnerabilities.length} known vulnerabilities`
+      return formatVulnerabilitySummary(flag)
     case 'license-violation':
       return 'license violation'
     case 'license-risk':
@@ -871,26 +898,42 @@ function compareFindingsBySeverity(
   b: PackageFinding,
   severityMap: Record<FlagKind, Severity>,
 ): number {
-  return scoreFindingSet(b.flags, severityMap) - scoreFindingSet(a.flags, severityMap)
+  return (
+    scoreFindingSet(b.flags, severityMap, b.isDirect) -
+    scoreFindingSet(a.flags, severityMap, a.isDirect)
+  )
 }
 
 function scoreTransitives(
   findings: readonly PackageFinding[],
   severityMap: Record<FlagKind, Severity>,
 ): number {
-  return findings.reduce((sum, finding) => sum + scoreFindingSet(finding.flags, severityMap), 0)
+  return findings.reduce(
+    (sum, finding) => sum + scoreFindingSet(finding.flags, severityMap, finding.isDirect),
+    0,
+  )
 }
 
-function scoreFindingSet(flags: readonly Flag[], severityMap: Record<FlagKind, Severity>): number {
-  return flags.reduce((sum, flag) => sum + SEVERITY_ORDER[severityMap[flag.kind]] + 1, 0)
+function scoreFindingSet(
+  flags: readonly Flag[],
+  severityMap: Record<FlagKind, Severity>,
+  isDirect = true,
+): number {
+  return flags.reduce(
+    (sum, flag) => sum + SEVERITY_ORDER[getFlagSeverity(flag, severityMap, isDirect)] + 1,
+    0,
+  )
 }
 
 function sortFlagsBySeverity(
   flags: readonly Flag[],
   severityMap: Record<FlagKind, Severity>,
+  isDirect = true,
 ): Flag[] {
   return flags.slice().sort((a, b) => {
-    const severityDelta = SEVERITY_ORDER[severityMap[b.kind]] - SEVERITY_ORDER[severityMap[a.kind]]
+    const severityDelta =
+      SEVERITY_ORDER[getFlagSeverity(b, severityMap, isDirect)] -
+      SEVERITY_ORDER[getFlagSeverity(a, severityMap, isDirect)]
     if (severityDelta !== 0) return severityDelta
     return a.kind.localeCompare(b.kind)
   })
@@ -915,8 +958,9 @@ function formatConciseFinding(
   severityMap: Record<FlagKind, Severity>,
 ): string {
   const primaryFlags = sortFlagsBySeverity(
-    finding.flags.filter((flag) => severityMap[flag.kind] !== 'info'),
+    finding.flags.filter((flag) => getFlagSeverity(flag, severityMap, finding.isDirect) !== 'info'),
     severityMap,
+    finding.isDirect,
   )
   const location = finding.isDirect
     ? 'direct'
@@ -929,81 +973,41 @@ function formatConciseFinding(
   return `${finding.name}@${finding.version} [${location}] ${summaries.join(' · ')}`
 }
 
-function formatScanReviewCard(
+function formatDirectDependencyReviewCard(
   index: number,
-  finding: PackageFinding,
-  severityMap: Record<FlagKind, Severity>,
+  summary: DirectDependencySummary,
 ): string[] {
   const lines: string[] = []
-  const primaryFlags = sortFlagsBySeverity(
-    finding.flags.filter((flag) => severityMap[flag.kind] !== 'info'),
-    severityMap,
-  )
-  const highestSeverity = findMaxSeverity(primaryFlags, severityMap)
-  const location = finding.isDirect
-    ? 'Direct dependency'
-    : finding.introducedBy
-      ? `Transitive via ${finding.introducedBy}`
-      : 'Transitive dependency'
-
+  const headlineSeverity =
+    summary.directSeverity !== 'info' ? summary.directSeverity : summary.transitiveSeverity
   lines.push(
-    `  ${index}. ${SEVERITY_ICON[highestSeverity]} ${chalk.bold(`${finding.name}@${finding.version}`)} ${chalk.dim(`(${location})`)}`,
+    `  ${index}. ${SEVERITY_ICON[headlineSeverity]} ${chalk.bold(`${summary.name}@${summary.version}`)} ${chalk.dim('(Direct dependency)')}`,
   )
-  lines.push(`     Why: ${primaryFlags.slice(0, 2).map(formatActionableFlagSummary).join(' · ')}`)
-  lines.push(`     Action: ${formatActionHint(primaryFlags)}`)
-
+  if (summary.directDetails.length > 0) {
+    lines.push(`     direct: ${summary.directDetails.join(' · ')}`)
+  }
+  if (summary.transitiveCount > 0) {
+    const detail =
+      summary.transitiveDetails.length > 0
+        ? `; e.g. ${summary.transitiveDetails.slice(0, 1).join(' · ')}`
+        : ''
+    lines.push(
+      `     transitive: ${summary.transitiveCount} issue${summary.transitiveCount === 1 ? '' : 's'}${detail}`,
+    )
+  }
   return lines
 }
 
-function formatActionableFlagSummary(flag: Flag): string {
-  switch (flag.kind) {
-    case 'vulnerability':
-      return `${flag.vulnerabilities.length} known vulnerabilit${flag.vulnerabilities.length === 1 ? 'y' : 'ies'}`
-    case 'deprecated':
-      return 'deprecated by maintainer'
-    case 'license-violation':
-      return flag.violation === 'denied'
-        ? formatDeniedLicenseSummary(flag.license)
-        : flag.violation === 'unknown'
-          ? `${flag.license ?? 'license'} not in the approved software-license list`
-          : 'missing license metadata'
-    case 'install-scripts':
-      return `${flag.scripts.join(', ')} install hook${flag.scripts.length === 1 ? '' : 's'}`
-    case 'unmaintained':
-      return `last release ${flag.daysSincePublish} days ago${flag.isArchived ? ' and repo archived' : ''}`
-    case 'single-maintainer':
-      return `${flag.npmMaintainerCount} listed maintainer`
-    case 'license-risk':
-      return formatLicenseRiskSummary(flag.license, flag.risk)
-    case 'missing-repository':
-      return 'repository metadata missing'
-    case 'version-risk':
-      return flag.issue === 'prerelease'
-        ? `using prerelease ${flag.currentVersion}`
-        : `${flag.majorVersionsBehind ?? 0} major versions behind`
-    case 'dependency-footprint':
-      return `${flag.transitiveCount} transitive dependencies`
-  }
-}
+function formatVulnerabilitySummary(flag: Extract<Flag, { kind: 'vulnerability' }>): string {
+  const counts = flag.vulnerabilities.reduce<Record<string, number>>((acc, vulnerability) => {
+    acc[vulnerability.severity] = (acc[vulnerability.severity] ?? 0) + 1
+    return acc
+  }, {})
+  const parts = ['critical', 'high', 'medium', 'low']
+    .filter((severity) => counts[severity] !== undefined)
+    .map((severity) => `${counts[severity]} ${severity}`)
 
-function formatActionHint(flags: readonly Flag[]): string {
-  if (flags.some((flag) => flag.kind === 'vulnerability')) {
-    return 'Upgrade or replace this package, then re-run the scan.'
-  }
-  if (flags.some((flag) => flag.kind === 'deprecated')) {
-    return 'Plan an upgrade or replacement; maintainers no longer support this package.'
-  }
-  if (flags.some((flag) => flag.kind === 'license-violation')) {
-    return 'Review your license policy and replace or waive this dependency if needed.'
-  }
-  if (flags.some((flag) => flag.kind === 'install-scripts')) {
-    return 'Audit the install script and confirm the package is trusted before keeping it.'
-  }
-  if (flags.some((flag) => flag.kind === 'unmaintained')) {
-    return 'Check whether a maintained alternative or newer package line is available.'
-  }
-
-  return 'Inspect this package in detail before accepting it into the dependency tree.'
+  return `${flag.vulnerabilities.length} known vulnerabilit${flag.vulnerabilities.length === 1 ? 'y' : 'ies'}${parts.length > 0 ? ` (${parts.join(', ')})` : ''}`
 }
 
 function summarizeTopFlagCounts(findings: readonly PackageFinding[]): string[] {
@@ -1024,59 +1028,19 @@ function summarizeTopFlagCounts(findings: readonly PackageFinding[]): string[] {
 }
 
 function formatSuggestedNextStep(
-  findings: readonly PackageFinding[],
-  severityMap: Record<FlagKind, Severity>,
+  reviewSummaries: readonly DirectDependencySummary[],
+  allDirectSummaries: readonly DirectDependencySummary[],
 ): string {
-  const directCritical = findings.find(
-    (finding) =>
-      finding.isDirect && finding.flags.some((flag) => severityMap[flag.kind] === 'critical'),
-  )
-  if (directCritical) {
-    return `Start with ${directCritical.name}@${directCritical.version}; it is a direct dependency with blocking findings.`
+  const next =
+    reviewSummaries.find((summary) => summary.directSeverity === 'critical') ??
+    allDirectSummaries.find((summary) => summary.directSeverity === 'critical') ??
+    reviewSummaries[0] ??
+    allDirectSummaries[0]
+  if (next) {
+    return `Start with ${next.name}@${next.version}.`
   }
 
-  const transitiveCritical = findings.find((finding) =>
-    finding.flags.some((flag) => severityMap[flag.kind] === 'critical'),
-  )
-  if (transitiveCritical) {
-    return transitiveCritical.introducedBy
-      ? `Inspect ${transitiveCritical.introducedBy}; it pulls in a transitive package with blocking findings.`
-      : `Inspect ${transitiveCritical.name}@${transitiveCritical.version}; it has blocking findings and no direct introducer could be resolved.`
-  }
-
-  const directWarning = findings.find((finding) => finding.isDirect)
-  if (directWarning) {
-    return `Start with ${directWarning.name}@${directWarning.version}; it is a direct dependency with warning-level findings.`
-  }
-
-  return 'Review the highest-severity transitive packages, then open --details for the full dependency breakdown.'
-}
-
-function selectReviewFindings(
-  findings: readonly PackageFinding[],
-  severityMap: Record<FlagKind, Severity>,
-): PackageFinding[] {
-  if (findings.length <= 5) return findings.slice()
-
-  const directCritical = findings.find(
-    (finding) =>
-      finding.isDirect && finding.flags.some((flag) => severityMap[flag.kind] === 'critical'),
-  )
-  if (!directCritical) {
-    return findings.slice(0, 5)
-  }
-
-  const topFindings = findings.slice(0, 5)
-  if (
-    topFindings.some(
-      (finding) =>
-        finding.name === directCritical.name && finding.version === directCritical.version,
-    )
-  ) {
-    return topFindings
-  }
-
-  return [directCritical, ...findings.filter((finding) => finding !== directCritical).slice(0, 4)]
+  return 'Review the highest-severity dependencies.'
 }
 
 function formatDeniedLicenseMessage(license: string | null): string {
@@ -1093,20 +1057,6 @@ function formatDeniedLicenseMessage(license: string | null): string {
   return `${license} (blocked by policy)`
 }
 
-function formatDeniedLicenseSummary(license: string | null): string {
-  if (!license) return 'license blocked by policy'
-
-  if (STRONG_COPYLEFT_LICENSES.has(license)) {
-    return `${license} blocked by policy (strong copyleft)`
-  }
-
-  if (RESTRICTED_USE_LICENSES.has(license)) {
-    return `${license} blocked by policy (usage restrictions or non-open terms)`
-  }
-
-  return `${license} blocked by policy`
-}
-
 function formatLicenseRiskMessage(license: string, risk: 'uncommon' | 'non-standard'): string {
   if (license === 'CC-BY-4.0') {
     return `${license} (not recommended for software)`
@@ -1114,15 +1064,6 @@ function formatLicenseRiskMessage(license: string, risk: 'uncommon' | 'non-stand
 
   return `${license} (${risk})`
 }
-
-function formatLicenseRiskSummary(license: string, risk: 'uncommon' | 'non-standard'): string {
-  if (license === 'CC-BY-4.0') {
-    return `${license} is not recommended for software`
-  }
-
-  return risk === 'uncommon' ? `${license} needs license review` : `${license} license risk`
-}
-
 // ── CI Output ──────────────────────────────────────────────────────────────
 
 /**
@@ -1141,7 +1082,9 @@ export function formatCi(policyResult: PolicyResult, policy: PolicyConfig): stri
   // Only show findings at or above the failOn threshold
   const failOnLevel = policy.ci.failOn
   const blocking = policyResult.findings.filter((f) =>
-    f.flags.some((flag) => severityIsAtLeast(severityMap[flag.kind], failOnLevel)),
+    f.flags.some((flag) =>
+      severityIsAtLeast(getFlagSeverity(flag, severityMap, f.isDirect), failOnLevel),
+    ),
   )
 
   for (const finding of blocking) {
@@ -1152,8 +1095,9 @@ export function formatCi(policyResult: PolicyResult, policy: PolicyConfig): stri
     lines.push(`${chalk.red('✖')} ${chalk.bold(finding.name)}@${finding.version} ${location}`)
 
     for (const flag of finding.flags) {
-      if (severityIsAtLeast(severityMap[flag.kind], failOnLevel)) {
-        lines.push(`  ${SEVERITY_ICON[severityMap[flag.kind]]} ${formatFlagOneLiner(flag)}`)
+      const severity = getFlagSeverity(flag, severityMap, finding.isDirect)
+      if (severityIsAtLeast(severity, failOnLevel)) {
+        lines.push(`  ${SEVERITY_ICON[severity]} ${formatFlagOneLiner(flag)}`)
       }
     }
   }
@@ -1281,7 +1225,7 @@ function formatFlagChecklist(
     const matching = kinds ? flags.filter((f) => kinds.includes(f.kind)) : []
     if (matching.length > 0) {
       for (const flag of matching) {
-        const sev = severityMap[flag.kind]
+        const sev = getFlagSeverity(flag, severityMap, true)
         lines.push(`  ${SEVERITY_ICON[sev]} ${cat.label.padEnd(20)} ${formatFlagOneLiner(flag)}`)
       }
     } else {
@@ -1367,11 +1311,12 @@ function formatGitHubSection(github: GitHubRepoData): string[] {
 function findMaxSeverity(
   flags: readonly Flag[],
   severityMap: Record<FlagKind, Severity>,
+  isDirect = true,
 ): Severity {
   if (flags.length === 0) return 'info'
   let max: Severity = 'info'
   for (const flag of flags) {
-    const sev = severityMap[flag.kind]
+    const sev = getFlagSeverity(flag, severityMap, isDirect)
     if (sev === 'critical') return 'critical'
     if (sev === 'warning') max = 'warning'
   }
