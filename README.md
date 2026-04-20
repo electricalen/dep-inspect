@@ -167,7 +167,7 @@ This repository uses a release PR model rather than publishing on every merge to
 - only merging that release PR publishes to npm
 - the release publish also updates `CHANGELOG.md`, creates the Git tag, and creates the GitHub Release
 
-Release process details, maintainer checks, and provenance verification steps live in [RELEASING.md](/Users/dsawyer/d1/dep-inspect/RELEASING.md).
+Release process details, maintainer checks, and provenance verification steps live in [RELEASING.md](./RELEASING.md).
 
 ### Creating a Changeset
 
@@ -189,9 +189,9 @@ If a pull request only changes internal tooling, CI, docs, or other non-publishe
 
 ### Publishing Setup
 
-The release workflow is defined in [release.yml](/Users/dsawyer/d1/dep-inspect/.github/workflows/release.yml) and is intended to publish from GitHub Actions, not from a maintainer laptop.
+The release workflow is defined in [release.yml](./.github/workflows/release.yml) and is intended to publish from GitHub Actions, not from a maintainer laptop.
 
-The repository is set up for npm trusted publishing and provenance so users can verify that the npm package was produced from the tagged GitHub source. The full setup and verification guidance is documented in [RELEASING.md](/Users/dsawyer/d1/dep-inspect/RELEASING.md).
+The repository is set up for npm trusted publishing and provenance so users can verify that the npm package was produced from the tagged GitHub source. The full setup and verification guidance is documented in [RELEASING.md](./RELEASING.md).
 
 ## Commands
 

@@ -193,7 +193,7 @@ This repository does not publish on every merge to `main`.
 
 This keeps day-to-day commits flowing while making releases explicit, reviewable, and reproducible.
 
-The full maintainer runbook, provenance notes, and user verification steps are documented in [RELEASING.md](/Users/dsawyer/d1/dep-inspect/RELEASING.md).
+The full maintainer runbook, provenance notes, and user verification steps are documented in [RELEASING.md](./RELEASING.md).
 
 ## Reporting Bugs
 

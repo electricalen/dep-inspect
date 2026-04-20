@@ -51,7 +51,7 @@ For internal-only work such as docs-only changes, local tooling, or CI-only chan
 
 ## What Happens Automatically
 
-The release workflow is defined in [release.yml](/Users/dsawyer/d1/dep-inspect/.github/workflows/release.yml).
+The release workflow is defined in [release.yml](./.github/workflows/release.yml).
 
 When a pull request with unreleased changesets lands on `main`:
 
