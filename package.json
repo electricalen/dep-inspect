@@ -13,6 +13,7 @@
     "node": ">=20"
   },
   "scripts": {
+    "changeset": "changeset",
     "dev": "tsx src/index.ts",
     "build": "tsup",
     "typecheck": "tsc --noEmit",
@@ -24,9 +25,12 @@
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
     "validate": "pnpm typecheck && pnpm lint && pnpm test:run",
+    "publish:check": "pnpm format:check && pnpm typecheck && pnpm lint && pnpm test:run",
     "release:check": "pnpm format:check && pnpm typecheck && pnpm lint && pnpm test:run && pnpm build && node dist/index.js --help",
+    "version-packages": "changeset version",
+    "release": "changeset publish",
     "prepack": "pnpm build",
-    "prepublishOnly": "pnpm release:check",
+    "prepublishOnly": "pnpm publish:check",
     "prepare": "husky"
   },
   "keywords": [
@@ -48,6 +52,10 @@
     "type": "git",
     "url": "git+https://github.com/electricalen/dep-inspect.git"
   },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "license": "MIT",
   "dependencies": {
     "@commander-js/extra-typings": "^14.0.0",
@@ -61,6 +69,7 @@
     "zod": "^3.24.4"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.30.0",
     "@commitlint/cli": "^19.8.0",
     "@commitlint/config-conventional": "^19.8.0",
     "@fast-check/vitest": "^0.2.3",
