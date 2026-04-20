@@ -30,6 +30,12 @@ Release maintainers should run:
 pnpm release:check
 ```
 
+User-facing changes should also include a changeset:
+
+```bash
+pnpm changeset
+```
+
 Run the CLI locally:
 
 ```bash
@@ -104,9 +110,10 @@ Review the staged diff after the hook runs. If the hook rewrites files, re-stage
 1. Open an issue for larger changes or behavior changes that may affect policy semantics.
 2. Create a focused branch.
 3. Add or update tests with the implementation.
-4. Run the required local checks.
-5. Update documentation if users will notice the change.
-6. Open a pull request with a clear description of the problem, approach, and tradeoffs.
+4. Add a changeset with `pnpm changeset` when the change should affect the published package version or changelog.
+5. Run the required local checks.
+6. Update documentation if users will notice the change.
+7. Open a pull request with a clear description of the problem, approach, and tradeoffs.
 
 ## Code Guidelines
 
@@ -169,9 +176,24 @@ Update the relevant docs when changing:
 
 - The change is scoped and reviewable
 - Tests cover the new or changed behavior
+- A changeset is included for user-facing package changes
 - Required local checks pass locally
 - Documentation is updated where needed
 - Breaking changes are clearly called out
+
+## Release Process
+
+This repository does not publish on every merge to `main`.
+
+- Every pull request into `main` runs CI only
+- Releasable pull requests should include a changeset
+- A GitHub Actions release workflow collects pending changesets into a dedicated release PR
+- Only merging that release PR publishes to npm
+- The release merge also creates the version tag, updates `CHANGELOG.md`, and creates the GitHub Release
+
+This keeps day-to-day commits flowing while making releases explicit, reviewable, and reproducible.
+
+The full maintainer runbook, provenance notes, and user verification steps are documented in [RELEASING.md](/Users/dsawyer/d1/dep-inspect/RELEASING.md).
 
 ## Reporting Bugs
 

@@ -114,6 +114,12 @@ Before publishing a release from source, run:
 pnpm release:check
 ```
 
+For release maintainers working through the automated flow, use:
+
+```bash
+pnpm changeset
+```
+
 ## Quick Start
 
 Inspect a package before adding it:
@@ -151,6 +157,41 @@ Generate a starter policy file:
 ```bash
 dep-inspect init
 ```
+
+## Release Workflow
+
+This repository uses a release PR model rather than publishing on every merge to `main`.
+
+- user-facing changes should include a changeset created with `pnpm changeset`
+- merges to `main` update or create a dedicated release PR
+- only merging that release PR publishes to npm
+- the release publish also updates `CHANGELOG.md`, creates the Git tag, and creates the GitHub Release
+
+Release process details, maintainer checks, and provenance verification steps live in [RELEASING.md](/Users/dsawyer/d1/dep-inspect/RELEASING.md).
+
+### Creating a Changeset
+
+For a user-facing change, run:
+
+```bash
+pnpm changeset
+```
+
+Then choose the bump type:
+
+- `patch` for bug fixes and small backward-compatible corrections
+- `minor` for new backward-compatible features
+- `major` for breaking changes
+
+Write the summary in release-note language, because it will be carried into `CHANGELOG.md` and the GitHub Release.
+
+If a pull request only changes internal tooling, CI, docs, or other non-published behavior, you can skip adding a changeset.
+
+### Publishing Setup
+
+The release workflow is defined in [release.yml](/Users/dsawyer/d1/dep-inspect/.github/workflows/release.yml) and is intended to publish from GitHub Actions, not from a maintainer laptop.
+
+The repository is set up for npm trusted publishing and provenance so users can verify that the npm package was produced from the tagged GitHub source. The full setup and verification guidance is documented in [RELEASING.md](/Users/dsawyer/d1/dep-inspect/RELEASING.md).
 
 ## Commands
 
