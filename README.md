@@ -1,13 +1,72 @@
 # dep-inspect
 
-`dep-inspect` catches risky npm packages before they land in your project.
+Find the dependencies you actually need to review, not a wall of noise.
 
-It is a local-first CLI for two common workflows:
+`dep-inspect` is a local-first CLI for reviewing npm packages before adoption and enforcing dependency risk policy in CI. It surfaces high-confidence, actionable risks first so you can spend time on the packages that matter instead of triaging hundreds of low-value alerts.
 
-- check a package before you install it
-- fail CI when dependencies trip high-confidence risk checks
+## Why Use It
 
-The default experience is intentionally narrow and fast to read. It focuses on high-confidence, actionable signals first, and keeps heuristic-heavy checks behind `--strict`.
+- more practical dependency triage than `npm audit` alone
+- high-confidence defaults tuned for human review
+- useful both before install and in CI
+- no SaaS account required
+- JSON output for automation
+- SQLite cache for fast repeat scans
+
+## Why Not `npm audit`?
+
+`npm audit` is useful data, but the default experience is often too noisy for fast decisions.
+
+`dep-inspect` is opinionated:
+
+- prioritize actionable signal over completeness
+- default to high-confidence checks
+- keep heuristic-heavy checks behind `--strict`
+- optimize for real-world developer workflows
+
+## Quick Start
+
+Run without installing:
+
+```bash
+npx dep-inspect scan
+```
+
+Inspect a package before adding it:
+
+```bash
+dep-inspect inspect eslint
+```
+
+Enable stricter checks when you want more context:
+
+```bash
+dep-inspect inspect eslint --strict
+```
+
+Scan the current project:
+
+```bash
+dep-inspect scan
+```
+
+Show the full package-by-package breakdown:
+
+```bash
+dep-inspect scan --details
+```
+
+Use it in CI:
+
+```bash
+dep-inspect ci --github
+```
+
+Generate a starter policy file:
+
+```bash
+dep-inspect init
+```
 
 ## What `inspect` Checks
 
@@ -37,7 +96,7 @@ By default it checks the same policy-backed package signals as `inspect` across 
 
 By default, `scan` does not fetch GitHub data. Use `--github` when you want repository-backed maintenance context such as archived repositories.
 
-## Optional Strict Mode
+## Strict Mode
 
 If you want more context, `--strict` enables additional lower-confidence or more heuristic-heavy signals:
 
@@ -71,19 +130,20 @@ Vulnerability findings are severity-aware:
 - transitive issues are still scanned, but they are capped at `warning` by default and shown under the direct dependency that introduces them
 - by default, only direct dependency findings can block because non-direct findings are capped at `warning`
 
-The reasoning behind those defaults is simple:
+## Why a Package Gets Flagged
 
-- `critical` is reserved for signals with a direct security, legal, or maintenance stop-ship implication
-- `warning` is used for signals that are often legitimate but deserve review before adoption
-- `info` is used for contextual signals that may matter to some teams but are too heuristic-heavy to fail builds by default
+Flags are evidence-based and category-specific rather than score-based.
 
-## Why Use It
-
-- more practical dependency triage than `npm audit` alone
-- no SaaS account required
-- good fit for preinstall review and lightweight CI policy
-- JSON output for automation
-- SQLite cache for fast repeat scans
+- Vulnerability: OSV returned one or more advisories for the exact package version; the reported severity is derived from the highest advisory severity and whether the package is direct or transitive
+- Deprecated: the npm package metadata includes a maintainer deprecation notice
+- License violation: the package license is denied, missing, or not allowed by policy
+- Install scripts: the package runs install lifecycle scripts that execute during dependency installation
+- Unmaintained: the latest publish date is older than the configured threshold, or the GitHub repo is archived when GitHub data is enabled
+- Single maintainer: the package has one or zero npm maintainers
+- License risk: the license is uncommon or non-standard rather than explicitly denied
+- Missing repository: the package does not provide a usable repository link
+- Version risk: the inspected version is a prerelease or at least two major versions behind latest
+- Dependency footprint: the resolved tree is unusually large, deep, or duplicated
 
 ## Installation
 
@@ -107,91 +167,6 @@ pnpm install
 pnpm build
 node dist/index.js --help
 ```
-
-Before publishing a release from source, run:
-
-```bash
-pnpm release:check
-```
-
-For release maintainers working through the automated flow, use:
-
-```bash
-pnpm changeset
-```
-
-## Quick Start
-
-Inspect a package before adding it:
-
-```bash
-dep-inspect inspect eslint
-```
-
-Enable heuristic-heavy checks when you want a stricter review:
-
-```bash
-dep-inspect inspect eslint --strict
-```
-
-Scan the current project:
-
-```bash
-dep-inspect scan
-```
-
-Show the full package-by-package breakdown:
-
-```bash
-dep-inspect scan --details
-```
-
-Use it in CI:
-
-```bash
-dep-inspect ci --github
-```
-
-Generate a starter policy file:
-
-```bash
-dep-inspect init
-```
-
-## Release Workflow
-
-This repository uses a release PR model rather than publishing on every merge to `main`.
-
-- user-facing changes should include a changeset created with `pnpm changeset`
-- merges to `main` update or create a dedicated release PR
-- only merging that release PR publishes to npm
-- the release publish also updates `CHANGELOG.md`, creates the Git tag, and creates the GitHub Release
-
-Release process details, maintainer checks, and provenance verification steps live in [RELEASING.md](./RELEASING.md).
-
-### Creating a Changeset
-
-For a user-facing change, run:
-
-```bash
-pnpm changeset
-```
-
-Then choose the bump type:
-
-- `patch` for bug fixes and small backward-compatible corrections
-- `minor` for new backward-compatible features
-- `major` for breaking changes
-
-Write the summary in release-note language, because it will be carried into `CHANGELOG.md` and the GitHub Release.
-
-If a pull request only changes internal tooling, CI, docs, or other non-published behavior, you can skip adding a changeset.
-
-### Publishing Setup
-
-The release workflow is defined in [release.yml](./.github/workflows/release.yml) and is intended to publish from GitHub Actions, not from a maintainer laptop.
-
-The repository is set up for npm trusted publishing and provenance so users can verify that the npm package was produced from the tagged GitHub source. The full setup and verification guidance is documented in [RELEASING.md](./RELEASING.md).
 
 ## Commands
 
@@ -223,21 +198,6 @@ The default output is optimized for fast triage:
 
 If you want every category and package detail, use `--details`.
 
-## Why a Package Gets Flagged
-
-Flags are evidence-based and category-specific rather than score-based.
-
-- Vulnerability: OSV returned one or more advisories for the exact package version; the reported severity is derived from the highest advisory severity and whether the package is direct or transitive
-- Deprecated: the npm package metadata includes a maintainer deprecation notice
-- License violation: the package license is denied, missing, or not allowed by policy
-- Install scripts: the package runs install lifecycle scripts that execute during dependency installation
-- Unmaintained: the latest publish date is older than the configured threshold, or the GitHub repo is archived when GitHub data is enabled
-- Single maintainer: the package has one or zero npm maintainers
-- License risk: the license is uncommon or non-standard rather than explicitly denied
-- Missing repository: the package does not provide a usable repository link
-- Version risk: the inspected version is a prerelease or at least two major versions behind latest
-- Dependency footprint: the resolved tree is unusually large, deep, or duplicated
-
 ## Example Policy File
 
 Run `dep-inspect init` to generate a starter config:
@@ -257,58 +217,6 @@ Run `dep-inspect init` to generate a starter config:
     "version-risk": "off"
   },
   "licenses": {
-    "allow": [
-      "0BSD",
-      "AFL-3.0",
-      "Apache-2.0",
-      "Artistic-2.0",
-      "BlueOak-1.0.0",
-      "BSD-1-Clause",
-      "BSD-2-Clause",
-      "BSD-2-Clause-Patent",
-      "BSD-3-Clause",
-      "BSL-1.0",
-      "CC0-1.0",
-      "ECL-2.0",
-      "EPL-2.0",
-      "EUPL-1.1",
-      "EUPL-1.2",
-      "ISC",
-      "LGPL-2.1-only",
-      "LGPL-2.1-or-later",
-      "LGPL-3.0-only",
-      "LGPL-3.0-or-later",
-      "MIT",
-      "MIT-0",
-      "MPL-2.0",
-      "NCSA",
-      "PostgreSQL",
-      "PSF-2.0",
-      "Python-2.0",
-      "Unlicense",
-      "Zlib"
-    ],
-    "deny": [
-      "AGPL-3.0",
-      "AGPL-3.0-only",
-      "AGPL-3.0-or-later",
-      "BUSL-1.1",
-      "CC-BY-NC-4.0",
-      "CC-BY-NC-ND-4.0",
-      "CC-BY-NC-SA-4.0",
-      "CC-BY-ND-4.0",
-      "Commons-Clause",
-      "Elastic-2.0",
-      "GPL-2.0",
-      "GPL-2.0-only",
-      "GPL-2.0-or-later",
-      "GPL-3.0",
-      "GPL-3.0-only",
-      "GPL-3.0-or-later",
-      "PolyForm-Noncommercial-1.0.0",
-      "Prosperity-3.0.0",
-      "SSPL-1.0"
-    ],
     "unknown": "warning"
   },
   "ci": {
@@ -335,46 +243,9 @@ Example GitHub Actions step:
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-## Development
-
-Requirements:
-
-- Node.js 20 or newer
-- pnpm 10 or newer
-
-Local workflow:
-
-```bash
-pnpm install
-pnpm validate
-pnpm build
-```
-
-Useful commands:
-
-```bash
-pnpm dev inspect lodash
-pnpm dev scan --details
-pnpm test:coverage
-```
-
-## Architecture
-
-The project uses ports and adapters with pure detectors and thin I/O integrations.
-
-Key design notes:
-
-1. [Result types over exceptions](docs/adr/001-result-types-over-exceptions.md)
-2. [Ports and adapters](docs/adr/002-ports-and-adapters.md)
-3. [Flag detection as pure functions](docs/adr/003-flag-detection-as-pure-functions.md)
-4. [Severity tiers over scores](docs/adr/004-severity-tiers-over-scores.md)
-5. [SQLite cache](docs/adr/005-sqlite-cache.md)
-
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
-
-Issue and pull request templates are provided under `.github/` to keep bug reports, feature requests, and review context consistent.
 
 ## Security
 
