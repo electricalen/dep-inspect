@@ -25,11 +25,12 @@
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
     "validate": "pnpm typecheck && pnpm lint && pnpm test:run",
+    "publish:check": "pnpm format:check && pnpm typecheck && pnpm lint && pnpm test:run",
     "release:check": "pnpm format:check && pnpm typecheck && pnpm lint && pnpm test:run && pnpm build && node dist/index.js --help",
     "version-packages": "changeset version",
-    "release": "pnpm release:check && changeset publish",
+    "release": "changeset publish",
     "prepack": "pnpm build",
-    "prepublishOnly": "pnpm release:check",
+    "prepublishOnly": "pnpm publish:check",
     "prepare": "husky"
   },
   "keywords": [
